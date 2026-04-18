@@ -1,0 +1,47 @@
+server:
+  port: 8080
+
+app:
+  browser:
+    # 啟動完成後自動開啟登入頁（無桌面／Docker 會略過）
+    open-login: true
+
+spring:
+  application:
+    name: mvc-demo-jwt-lab
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/gjun
+    username: root
+    password: 1234
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  sql:
+    init:
+      mode: always
+  thymeleaf:
+    mode: HTML
+    cache: false
+
+jwt:
+  secret: "lab-demo-change-in-production-use-long-random-string"
+  access-token-minutes: 15
+  refresh-token-days: 7
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  paths-to-match: /api/**
+
+logging:
+  level:
+    org.springframework.security: INFO

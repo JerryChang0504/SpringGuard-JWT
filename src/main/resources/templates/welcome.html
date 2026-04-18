@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" xmlns:th="http://www.thymeleaf.org">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>功能示範｜mvc-demo JWT Lab</title>
+	<link rel="stylesheet" th:href="@{/css/app.css}" href="/css/app.css" />
+</head>
+<body>
+	<div class="noise" aria-hidden="true"></div>
+	<div class="grid-bg" aria-hidden="true"></div>
+	<div id="toast-root" aria-live="polite" aria-relevant="additions"></div>
+
+	<div class="dashboard">
+		<header class="topnav">
+			<div class="topnav-inner">
+				<div class="brand-mini">
+					<div class="logo" aria-hidden="true">M</div>
+					<div>
+						<h1>mvc-demo 工作台</h1>
+						<p>JWT 與 Spring Security 端點示範</p>
+					</div>
+				</div>
+				<div class="nav-actions">
+					<div class="user-pill" id="userPill" hidden>
+						<div>
+							<div class="name" id="navUser">—</div>
+							<div class="roles" id="navRoles"></div>
+						</div>
+					</div>
+					<a class="btn-sm" href="/">首頁</a>
+					<a class="btn-sm" href="/swagger-ui.html" target="_blank" rel="noopener">Swagger UI</a>
+					<button type="button" class="btn-sm danger" id="logout">登出</button>
+				</div>
+			</div>
+		</header>
+
+		<main class="main">
+			<section class="hero" aria-labelledby="hero-title">
+				<h2 id="hero-title">歡迎使用示範儀表板</h2>
+				<p>
+					下方卡片可一鍵呼叫後端 API。受保護端點會自動帶上 <strong>Authorization: Bearer</strong>；
+					若 Access Token 失效，可先嘗試「刷新 Token」。
+				</p>
+			</section>
+
+			<div class="card-grid">
+				<section class="panel" aria-labelledby="p-public">
+					<div class="panel-head">
+						<div>
+							<h3 id="p-public">公開端點</h3>
+							<p><code>GET /api/public/info</code> — 不需 JWT。</p>
+						</div>
+					</div>
+					<div class="panel-body">
+						<div class="panel-actions">
+							<button type="button" class="btn-sm" id="btnPublic">呼叫公開 API</button>
+						</div>
+						<p class="hint">預期：HTTP 200，回傳 JSON 訊息。</p>
+						<pre id="outPublic" class="pre" aria-label="公開 API 回應"></pre>
+					</div>
+				</section>
+
+				<section class="panel" aria-labelledby="p-profile">
+					<div class="panel-head">
+						<div>
+							<h3 id="p-profile">個人資料</h3>
+							<p><code>GET /api/user/profile</code> — 需要 <strong>USER</strong> 角色。</p>
+						</div>
+					</div>
+					<div class="panel-body">
+						<div class="panel-actions">
+							<button type="button" class="btn-sm" id="btnProfile">取得個人資料</button>
+						</div>
+						<pre id="outProfile" class="pre" aria-label="個人資料回應"></pre>
+					</div>
+				</section>
+
+				<section class="panel" id="adminPanel" aria-labelledby="p-admin">
+					<div class="panel-head">
+						<div>
+							<h3 id="p-admin">管理員</h3>
+							<p><code>GET /api/admin/users</code> — 需要 <strong>ADMIN</strong> 角色。</p>
+						</div>
+					</div>
+					<div class="panel-body">
+						<p class="pill-warn" id="adminLock" hidden>此帳號沒有 ADMIN，無法呼叫此端點。</p>
+						<div class="panel-actions">
+							<button type="button" class="btn-sm" id="btnAdmin" disabled>呼叫管理員 API</button>
+						</div>
+						<pre id="outAdmin" class="pre" aria-label="管理員 API 回應"></pre>
+					</div>
+				</section>
+
+				<section class="panel" aria-labelledby="p-refresh">
+					<div class="panel-head">
+						<div>
+							<h3 id="p-refresh">Token 生命週期</h3>
+							<p><code>POST /api/auth/refresh</code> — 使用 refresh token 換發新 token。</p>
+						</div>
+					</div>
+					<div class="panel-body">
+						<div class="panel-actions">
+							<button type="button" class="btn-sm" id="btnRefresh">刷新 Token</button>
+						</div>
+						<p class="hint">成功後會更新瀏覽器 sessionStorage 內的 access／refresh。</p>
+						<pre id="outRefresh" class="pre" aria-label="刷新結果"></pre>
+					</div>
+				</section>
+
+				<section class="panel panel--wide" aria-labelledby="p-token">
+					<div class="panel-head">
+						<div>
+							<h3 id="p-token">目前 Access Token（截斷顯示）</h3>
+							<p>可用於 Swagger「Authorize」或手動複製測試。</p>
+						</div>
+					</div>
+					<div class="panel-body">
+						<div class="token-row">
+							<div class="token-preview" id="tokenPreview" title="Access token">尚未載入</div>
+							<button type="button" class="btn-sm" id="btnCopy">複製 Token</button>
+						</div>
+						<pre id="outCopy" class="pre" aria-label="複製結果"></pre>
+					</div>
+				</section>
+			</div>
+		</main>
+	</div>
+
+	<script th:inline="none">
+		const toastRoot = document.getElementById('toast-root');
+
+		function toast(message, kind) {
+			const el = document.createElement('div');
+			el.className = 'toast' + (kind === 'ok' ? ' toast--ok' : kind === 'bad' ? ' toast--bad' : '');
+			el.textContent = message;
+			toastRoot.appendChild(el);
+			setTimeout(() => el.remove(), 4200);
+		}
+
+		function authHeader() {
+			const t = sessionStorage.getItem('accessToken');
+			return t ? { 'Authorization': 'Bearer ' + t } : {};
+		}
+
+		function pretty(objOrText) {
+			if (typeof objOrText === 'string') return objOrText;
+			try { return JSON.stringify(objOrText, null, 2); } catch (e) { return String(objOrText); }
+		}
+
+		function setPre(id, text) {
+			const el = document.getElementById(id);
+			el.textContent = text || '';
+		}
+
+		function previewToken() {
+			const t = sessionStorage.getItem('accessToken') || '';
+			const el = document.getElementById('tokenPreview');
+			if (!t) { el.textContent = '（無）'; return; }
+			el.textContent = t.length > 56 ? (t.slice(0, 28) + ' … ' + t.slice(-16)) : t;
+			el.title = t;
+		}
+
+		function parseRoles(authorities) {
+			if (!authorities) return [];
+			return authorities.split(',').map(s => s.trim()).filter(Boolean);
+		}
+
+		function renderRoles(tagsEl, authoritiesText) {
+			const roles = parseRoles(authoritiesText);
+			tagsEl.innerHTML = '';
+			roles.forEach(r => {
+				const span = document.createElement('span');
+				span.className = 'role-tag' + (r === 'ROLE_ADMIN' ? ' role-tag--admin' : '');
+				span.textContent = r.replace('ROLE_', '');
+				tagsEl.appendChild(span);
+			});
+		}
+
+		let isAdmin = false;
+
+		async function bootstrap() {
+			const token = sessionStorage.getItem('accessToken');
+			if (!token) {
+				window.location.replace('/login');
+				return;
+			}
+			previewToken();
+			try {
+				const res = await fetch('/api/user/profile', { headers: { ...authHeader() } });
+				if (res.status === 401) {
+					sessionStorage.removeItem('accessToken');
+					sessionStorage.removeItem('refreshToken');
+					window.location.replace('/login');
+					return;
+				}
+				if (!res.ok) {
+					toast('無法載入使用者資訊（' + res.status + '）', 'bad');
+					return;
+				}
+				const data = await res.json();
+				document.getElementById('navUser').textContent = data.username || '—';
+				renderRoles(document.getElementById('navRoles'), data.authorities || '');
+				document.getElementById('userPill').hidden = false;
+				isAdmin = (data.authorities || '').split(',').map(s => s.trim()).includes('ROLE_ADMIN');
+				const adminBtn = document.getElementById('btnAdmin');
+				const lock = document.getElementById('adminLock');
+				const panel = document.getElementById('adminPanel');
+				if (!isAdmin) {
+					lock.hidden = false;
+					adminBtn.disabled = true;
+					panel.classList.add('locked');
+				} else {
+					lock.hidden = true;
+					adminBtn.disabled = false;
+					panel.classList.remove('locked');
+				}
+				setPre('outProfile', pretty(data));
+			} catch (e) {
+				toast('載入失敗，請重新登入。', 'bad');
+			}
+		}
+
+		async function safeJson(res) {
+			const text = await res.text();
+			if (!text) return { _empty: true };
+			try { return JSON.parse(text); } catch (e) { return { raw: text }; }
+		}
+
+		document.getElementById('btnPublic').addEventListener('click', async () => {
+			try {
+				const res = await fetch('/api/public/info');
+				const body = await safeJson(res);
+				setPre('outPublic', pretty(body));
+				toast(res.ok ? '公開 API 呼叫成功' : '公開 API 回應異常（' + res.status + '）', res.ok ? 'ok' : 'bad');
+			} catch (e) {
+				setPre('outPublic', String(e));
+				toast('呼叫失敗', 'bad');
+			}
+		});
+
+		document.getElementById('btnProfile').addEventListener('click', async () => {
+			try {
+				const res = await fetch('/api/user/profile', { headers: { ...authHeader(), 'Accept': 'application/json' } });
+				const body = await safeJson(res);
+				setPre('outProfile', pretty(body));
+				toast(res.ok ? '已更新個人資料回應' : '個人資料 API：' + res.status, res.ok ? 'ok' : 'bad');
+			} catch (e) {
+				setPre('outProfile', String(e));
+				toast('呼叫失敗', 'bad');
+			}
+		});
+
+		document.getElementById('btnAdmin').addEventListener('click', async () => {
+			if (!isAdmin) return;
+			try {
+				const res = await fetch('/api/admin/users', { headers: { ...authHeader(), 'Accept': 'application/json' } });
+				const body = await safeJson(res);
+				setPre('outAdmin', pretty(body));
+				toast(res.ok ? '管理員 API 呼叫成功' : '管理員 API：' + res.status, res.ok ? 'ok' : 'bad');
+			} catch (e) {
+				setPre('outAdmin', String(e));
+				toast('呼叫失敗', 'bad');
+			}
+		});
+
+		document.getElementById('btnRefresh').addEventListener('click', async () => {
+			const refreshToken = sessionStorage.getItem('refreshToken');
+			if (!refreshToken) {
+				setPre('outRefresh', '找不到 refreshToken，請重新登入。');
+				toast('沒有 refresh token', 'bad');
+				return;
+			}
+			try {
+				const res = await fetch('/api/auth/refresh', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ refreshToken })
+				});
+				const body = await safeJson(res);
+				setPre('outRefresh', pretty(body));
+				if (res.ok) {
+					sessionStorage.setItem('accessToken', body.accessToken);
+					sessionStorage.setItem('refreshToken', body.refreshToken);
+					previewToken();
+					toast('Token 已刷新', 'ok');
+				} else {
+					toast('刷新失敗（' + res.status + '）', 'bad');
+				}
+			} catch (e) {
+				setPre('outRefresh', String(e));
+				toast('刷新失敗', 'bad');
+			}
+		});
+
+		document.getElementById('btnCopy').addEventListener('click', async () => {
+			const t = sessionStorage.getItem('accessToken');
+			const out = document.getElementById('outCopy');
+			if (!t) {
+				out.textContent = '尚無 access token。';
+				toast('沒有可複製的 token', 'bad');
+				return;
+			}
+			try {
+				if (navigator.clipboard && window.isSecureContext) {
+					await navigator.clipboard.writeText(t);
+				} else {
+					const ta = document.createElement('textarea');
+					ta.value = t;
+					ta.style.position = 'fixed';
+					ta.style.left = '-9999px';
+					document.body.appendChild(ta);
+					ta.select();
+					document.execCommand('copy');
+					ta.remove();
+				}
+				out.textContent = '已複製 access token 到剪貼簿。';
+				toast('已複製到剪貼簿', 'ok');
+			} catch (e) {
+				out.textContent = '複製失敗：' + e;
+				toast('複製失敗', 'bad');
+			}
+		});
+
+		document.getElementById('logout').addEventListener('click', () => {
+			sessionStorage.removeItem('accessToken');
+			sessionStorage.removeItem('refreshToken');
+			window.location.href = '/login?logout';
+		});
+
+		bootstrap();
+	</script>
+</body>
+</html>

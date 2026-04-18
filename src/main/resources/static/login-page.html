@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>登入｜mvc-demo JWT Lab</title>
+	<link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+	<div class="noise" aria-hidden="true"></div>
+	<div class="grid-bg" aria-hidden="true"></div>
+	<div class="login-page">
+		<div class="login-shell">
+			<aside class="glass brand-card">
+				<div class="brand-inner">
+					<div class="badge"><span class="badge-dot" aria-hidden="true"></span> Spring Boot × JWT 示範</div>
+					<h1 class="brand-title"><span>安全防線</span><br />身分驗證工作台</h1>
+					<p class="brand-sub">
+						登入後可於儀表板實際呼叫公開 API、受保護的個人資料、管理員列表，並體驗 Refresh Token 與 JWT Filter 流程。
+					</p>
+					<ul class="feature-list" aria-label="本頁示範重點">
+						<li><span class="tick" aria-hidden="true">✓</span><span>Maven / Spring Security / JJWT 整合</span></li>
+						<li><span class="tick" aria-hidden="true">✓</span><span>登入簽發 access／refresh，前端以 Bearer 呼叫 API</span></li>
+						<li><span class="tick" aria-hidden="true">✓</span><span>角色控管：USER 與 ADMIN 端點差異</span></li>
+					</ul>
+					<div class="demo-accounts">
+						<h3>內建測試帳號</h3>
+						<div class="chips">
+							<span class="chip"><strong>user</strong> ／ password</span>
+							<span class="chip"><strong>admin</strong> ／ admin</span>
+						</div>
+					</div>
+				</div>
+			</aside>
+
+			<section class="glass form-card" aria-labelledby="login-title">
+				<div class="form-head">
+					<h2 id="login-title">登入</h2>
+					<p>輸入帳密後將導向功能示範儀表板。</p>
+				</div>
+				<p id="info" class="alert alert--info" hidden></p>
+				<p id="err" class="alert alert--error" hidden></p>
+				<form id="loginForm" novalidate>
+					<div class="field">
+						<label for="username">帳號</label>
+						<input id="username" name="username" type="text" autocomplete="username" required placeholder="例如：user" />
+					</div>
+					<div class="field">
+						<label for="password">密碼</label>
+						<input id="password" name="password" type="password" autocomplete="current-password" required placeholder="••••••••" />
+					</div>
+					<div class="btn-row">
+						<button class="btn btn-primary" type="submit">進入儀表板</button>
+					</div>
+				</form>
+				<div class="form-foot">
+					<a href="/">返回首頁</a>
+					<a href="/swagger-ui.html" target="_blank" rel="noopener">Swagger UI</a>
+				</div>
+			</section>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var params = new URLSearchParams(window.location.search);
+			if (params.get('loggedOut') === '1') {
+				var el = document.getElementById('info');
+				el.hidden = false;
+				el.textContent = '您已登出。';
+			}
+		})();
+		const form = document.getElementById('loginForm');
+		const err = document.getElementById('err');
+		form.addEventListener('submit', async function (e) {
+			e.preventDefault();
+			err.hidden = true;
+			const username = form.username.value.trim();
+			const password = form.password.value;
+			try {
+				const res = await fetch('/api/auth/login', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ username: username, password: password })
+				});
+				if (!res.ok) {
+					err.textContent = '帳號或密碼不正確，請再試一次。';
+					err.hidden = false;
+					return;
+				}
+				const data = await res.json();
+				sessionStorage.setItem('accessToken', data.accessToken);
+				sessionStorage.setItem('refreshToken', data.refreshToken);
+				window.location.href = '/welcome';
+			} catch (ex) {
+				err.textContent = '無法連線到伺服器，請確認應用程式已啟動。';
+				err.hidden = false;
+			}
+		});
+	</script>
+</body>
+</html>
